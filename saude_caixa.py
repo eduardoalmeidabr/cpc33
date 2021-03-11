@@ -6,7 +6,7 @@ from pyliferisk.mortalitytables import RP2000F, RP2000M
 df = pd.read_excel(io = r'saude_caixa.xlsx', sheet_name = 'Plan1')
 
 # Itera por cada participante na base de dados
-for i in df.index:
+for i in range(1): # df.index:
     # Totais dos passivos
     total_programado_titular = 0
     total_programado_conjuge = 0
@@ -39,15 +39,17 @@ for i in df.index:
     elegibilidade_anterior = h.elegibilidade(idade - 1, idade_aposentadoria)
     auxiliar_elegibilidade_anterior = h.auxiliar_elegibilidade(idade - 1, idade_aposentadoria)
     rateio = 1.0
-    crescimento_folha = h.crescimento_folha(p.taxa_crescimento_folha)
+    crescimento_folha = h.crescimento_folha(0, p.taxa_crescimento_folha)
 
-    # Custos posicionados
-    custo_posicionado_titular = crescimento_folha * (p.custo_medio * pow(1 + p.aging_factor, \
-        idade - p.idade_media))
-    custo_posicionado_conjuge = crescimento_folha * (p.custo_medio * pow(1 + p.aging_factor, \
-        idade_conjuge - p.idade_media))
-    custo_posicionado_temp = crescimento_folha * (p.custo_medio * (pow(1 + p.aging_factor, \
-        idade_dependente_temporario - p.idade_media)))
+    # Custo posicionado
+    custo_posicionado_titular = p.custo_medio * pow(1 + p.aging_factor, idade - p.idade_media)
+    custo_posicionado_conjuge = p.custo_medio * pow(1 + p.aging_factor, idade_conjuge - p.idade_media)
+    custo_posicionado_temp = p.custo_medio * pow(1 + p.aging_factor, idade_dependente_temporario - p.idade_media)
+
+    # Custos médios posicionados
+    custo_medio_posicionado_titular = crescimento_folha * custo_posicionado_titular
+    custo_medio_posicionado_conjuge = crescimento_folha * custo_posicionado_conjuge
+    custo_medio_posicionado_temp = crescimento_folha * custo_posicionado_temp
 
     mensalizacao = h.mensalizacao(idade, sexo)
     mensalizacao_conjuge = h.mensalizacao(idade_conjuge, 'F' if sexo == 'M' else 'M')
@@ -96,10 +98,10 @@ for i in df.index:
     auxiliar_pensao_morte_temp = tpxaa * custo_posicionado_temp * rateio * qx
 
     # Passivos
-    passivo_titular = custo_posicionado_titular * tpx * tpix * tpwx * rateio * \
-        vx * p.fator_capacidade * mensalizacao if elegibilidade else 0   
-    passivo_conjuge = custo_posicionado_conjuge * perc_casados * tpx_aux_conj * \
-        tpix * tpwx * tpy * p.fator_capacidade * rateio * vx * mensalizacao_conjuge if elegibilidade else 0
+    passivo_titular = 0.0 if not elegibilidade else custo_posicionado_titular * tpx * tpix * tpwx * rateio * \
+        vx * p.fator_capacidade * mensalizacao
+    passivo_conjuge = 0.0 if elegibilidade else custo_posicionado_conjuge * perc_casados * tpx_aux_conj * \
+        tpix * tpwx * tpy * p.fator_capacidade * rateio * vx * mensalizacao_conjuge
     passivo_aposentadoria_invalidez = auxiliar_invalidez_titular * vx * p.fator_capacidade * mensalizacao
     passivo_reversao_invalidez = auxiliar_invalidez_conjuge * perc_casados * vx * \
         p.fator_capacidade * mensalizacao
@@ -113,7 +115,8 @@ for i in df.index:
         p.fator_capacidade * mensalizacao
 
     # Valores a partir do segundo período
-    for j in range(idade + 1, 122):
+    for j in range(idade + 1, 121):
+        print(carteira, crescimento_folha, custo_medio_posicionado_titular)
         # Totais dos passivos
         total_programado_titular += passivo_titular
         total_programado_conjuge += passivo_conjuge
@@ -133,7 +136,7 @@ for i in df.index:
         elegibilidade_anterior = h.elegibilidade(j - 1, idade_aposentadoria)
         auxiliar_elegibilidade_anterior = h.auxiliar_elegibilidade(j - 1, idade_aposentadoria)
         rateio = tempo_servico_fixo / tempo_servico
-        crescimento_folha *= h.crescimento_folha(p.taxa_crescimento_folha)
+        crescimento_folha *= h.crescimento_folha(j - idade, p.taxa_crescimento_folha)
 
         qx = h.qx(j, sexo)
         qy = h.qx(j, 'F' if sexo == 'M' else 'M')
@@ -165,13 +168,10 @@ for i in df.index:
         vx = h.vx(j - idade, p.taxa_desconto)
         tempo_servico += 1
 
-        # Custos posicionados
-        custo_posicionado_titular = crescimento_folha * (p.custo_medio * pow(1 + p.aging_factor, \
-            j - p.idade_media))
-        custo_posicionado_conjuge = crescimento_folha * (p.custo_medio * pow(1 + p.aging_factor, \
-            idade_conjuge - p.idade_media))
-        custo_posicionado_temp = crescimento_folha * (p.custo_medio * (pow(1 + p.aging_factor, \
-            idade_dependente_temporario - p.idade_media)))
+        # Custos médios posicionados
+        custo_medio_posicionado_titular = crescimento_folha * custo_posicionado_titular
+        custo_medio_posicionado_conjuge = crescimento_folha * custo_posicionado_conjuge
+        custo_medio_posicionado_temp = crescimento_folha * custo_posicionado_temp
 
         # Beneficios
         beneficio_invalidez_titular = 0.0 if elegibilidade else custo_posicionado_titular
@@ -190,10 +190,10 @@ for i in df.index:
         auxiliar_pensao_morte_temp = tpxaa * custo_posicionado_temp * rateio * qx
 
         # Passivos
-        passivo_titular = custo_posicionado_titular * tpx * tpix * tpwx * rateio * \
-            vx * p.fator_capacidade * mensalizacao if elegibilidade else 0
-        passivo_conjuge = custo_posicionado_conjuge * perc_casados * tpx_aux_conj * \
-            tpix * tpwx * tpy * p.fator_capacidade * rateio * vx * mensalizacao_conjuge if elegibilidade else 0
+        passivo_titular = 0.0 if not elegibilidade else custo_posicionado_titular * tpx * tpix * tpwx * rateio * \
+            vx * p.fator_capacidade * mensalizacao  
+        passivo_conjuge = 0.0 if not elegibilidade else custo_posicionado_conjuge * perc_casados * tpx_aux_conj * \
+            tpix * tpwx * tpy * p.fator_capacidade * rateio * vx * mensalizacao_conjuge
         passivo_aposentadoria_invalidez = auxiliar_invalidez_titular * vx * p.fator_capacidade * mensalizacao
         passivo_reversao_invalidez = auxiliar_invalidez_conjuge * perc_casados * vx * \
             p.fator_capacidade * mensalizacao
@@ -206,8 +206,4 @@ for i in df.index:
         passivo_pensao_morte_temp = auxiliar_pensao_morte_temp * perc_casados * vx * \
             p.fator_capacidade * mensalizacao
 
-
-
-
-
-
+        
